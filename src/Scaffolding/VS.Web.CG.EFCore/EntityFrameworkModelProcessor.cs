@@ -8,6 +8,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
@@ -554,8 +555,42 @@ namespace Microsoft.VisualStudio.Web.CodeGeneration.EntityFrameworkCore
             }
             catch (Exception ex)
             {
+                if (ex.GetType().ToString().Equals("MySqlException") && ex.Message.Contains("Access Denied", StringComparison.OrdinalIgnoreCase))
+                {
+                    //userName will have some value, or will be empty. We're ok with both.
+                    string userName = GetUsername(ex.Message);
+                    ex = new Exception($"Unable to get DbContext Instance.\n.Access denied for user {userName}\n", ex);
+                    throw ex;
+                }
                 throw ex.Unwrap(_logger);
             }
+        }
+
+        internal static string GetUsername(string exceptionMssg)
+        {
+            string username = string.Empty;
+            if (!string.IsNullOrEmpty(exceptionMssg))
+            {
+                if (exceptionMssg.Contains("Access denied for user", StringComparison.OrdinalIgnoreCase))
+                {
+                    return string.Empty;
+                }
+                //format connection strings
+                exceptionMssg = exceptionMssg.Replace(" ", string.Empty);
+                exceptionMssg = exceptionMssg.Replace("\n", string.Empty);
+                exceptionMssg = exceptionMssg.Replace("\r", string.Empty);
+
+                var userIdMatch = Regex.Match(exceptionMssg, "[.]*uid=.*;", RegexOptions.IgnoreCase).Value;
+                userIdMatch = string.IsNullOrEmpty(userIdMatch) ? Regex.Match(exceptionMssg, "[.]*userid=.*;", RegexOptions.IgnoreCase).Value : userIdMatch;
+
+                var equalsIndex = userIdMatch.IndexOf('=');
+                var semiColonIndex = userIdMatch.IndexOf(';');
+                if (equalsIndex >= 0 && equalsIndex < semiColonIndex)
+                {
+                    username = userIdMatch.Substring(equalsIndex+1, semiColonIndex-equalsIndex-1);
+                }
+            }
+            return username;
         }
 
         private void ValidateEFSqlServerDependency()

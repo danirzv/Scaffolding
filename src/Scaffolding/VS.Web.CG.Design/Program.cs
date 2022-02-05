@@ -28,6 +28,7 @@ namespace Microsoft.VisualStudio.Web.CodeGeneration.Design
 
         private static void Execute(string[] args, ConsoleLogger logger)
         {
+            System.Diagnostics.Debugger.Launch();
             var app = new CommandLineApplication(false)
             {
                 Name = APPNAME,
